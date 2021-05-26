@@ -453,6 +453,43 @@ ValueDecl *DerivedConformance::deriveEquatable(ValueDecl *requirement) {
 
   // Build the necessary decl.
   if (requirement->getBaseName() == "==") {
+    auto NominalType = Nominal->getDeclaredType();
+    ASTContext &ConformanceContext = ConformanceDecl->getASTContext();
+    auto ComparableProtocol = ConformanceContext
+        .getProtocol(KnownProtocolKind::Comparable);
+    auto ComparableConformance = TypeChecker::conformsToProtocol(
+        NominalType, ComparableProtocol, getParentModule());
+
+    // `Comparable` inherits from `Equatable`, but does not provide a default
+    // implementation of `==`, so for enums and structs, the compiler
+    // synthesises one from member-wise `==`s (SE-0185). If the user-implemented
+    // `<` is not composed of member-wise inequalities, then the synthesised
+    // `==` is almost certainly incorrect.
+    //
+    // Warn the user of synthesised `==` if the type has non-synthesised
+    // `Comparable conformance.
+    if (ComparableConformance) {
+      DeclName LessThanFunctionName(
+          ConformanceContext,
+          DeclBaseName(ConformanceContext.Id_LessThanOperator),
+          {Identifier(), Identifier()});
+      ConcreteDeclRef LessThanFunctionWitness =
+          ComparableConformance.getWitnessByName(NominalType->getRValueType(),
+                                                 LessThanFunctionName);
+
+      auto LessThanFunctionDeclaration = LessThanFunctionWitness.getDecl();
+
+      if (LessThanFunctionDeclaration &&
+          !LessThanFunctionDeclaration->isImplicit()) {
+        LessThanFunctionDeclaration
+            ->diagnose(
+                diag::synthesized_equatable_nonsythesized_comparable_fixit,
+                NominalType)
+            .fixItInsert(LessThanFunctionDeclaration->getStartLoc(),
+                         diag::insert_equals_function_declaration, NominalType);
+      }
+    }
+
     if (auto ed = dyn_cast<EnumDecl>(Nominal)) {
       auto bodySynthesizer =
           !ed->hasCases()
