@@ -217,4 +217,18 @@ extension Comparable {
   public static func >= (lhs: Self, rhs: Self) -> Bool {
     return !(lhs < rhs)
   }
+  
+  /// Returns a Boolean value indicating whether the value of the first argument
+  /// is equal to that of the second argument.
+  ///
+  /// This is the default implementation of the equal operator (`==`) for any
+  /// type that conforms to `Comparable`.
+  ///
+  /// - Parameters:
+  ///   - lhs: A value to compare.
+  ///   - rhs: Another value to compare.
+  @inlinable
+  public static func == (lhs: Self, rhs: Self) -> Bool {
+    return !(lhs < rhs || lhs > rhs)
+  }
 }
